@@ -3,7 +3,7 @@
 This project provides a deep learning framework for EEG-based Parkinson
 vs Sham classification.\
 It supports multiple neural architectures including CNN, LSTM, GRU,
-BiLSTM, Attention-based models, and TCN.
+BiLSTM, Attention-based models, TCN, and Transformer-based models.
 
 The framework is designed for:
 
@@ -25,8 +25,8 @@ Each EEG file is expected to have shape:
 
     (520, 512)
 
--   520 epochs
--   512 samples per epoch
+-   520 epochs\
+-   512 samples per epoch\
 -   0.5 second window per epoch
 
 ------------------------------------------------------------------------
@@ -43,37 +43,36 @@ The framework supports the following architectures:
 -   `cnn_bilstm`
 -   `cnn_bilstm_att`
 -   `tcn`
+-   `transformer` 🆕
 
-All models support configurable complexity parameters such as:
+### 🔹 Transformer Model
 
--   CNN depth
--   Hidden size
--   Number of RNN layers
--   Dropout rate
+The Transformer architecture includes:
+
+-   Linear input embedding\
+-   Positional encoding\
+-   Multi-layer Transformer Encoder\
+-   Global average pooling\
+-   MLP classifier
+
+It is suitable for modeling long-range temporal dependencies.
 
 ------------------------------------------------------------------------
 
 # ⚙️ Reproducible Environment
 
-To ensure all team members use the exact same environment, this project
-includes an:
+This project includes:
 
     environment.yml
 
-file.
-
-## Using the environment file
-
-After cloning the repository:
+To install:
 
 ``` bash
 conda env create -f environment.yml
 conda activate eeg_leicester
 ```
 
-This guarantees consistent dependency versions across machines.
-
-If the environment needs updating, regenerate it on the main machine:
+To regenerate environment file:
 
 ``` bash
 conda activate eeg_leicester
@@ -83,8 +82,6 @@ conda env export > environment.yml
 ------------------------------------------------------------------------
 
 # 🚀 Training Usage
-
-The framework is fully configurable from the command line.
 
 ## Cross-Subject Evaluation
 
@@ -99,6 +96,22 @@ python train.py \
 --rnn_hidden 128 \
 --rnn_layers 2 \
 --dropout 0.3 \
+--epochs 30
+```
+
+## Transformer Example
+
+``` bash
+python train.py \
+--data_root data/leicester_dataset \
+--train_dirs A1 A2 \
+--test_dirs B1 B2 \
+--split_mode folder \
+--model transformer \
+--d_model 128 \
+--num_layers 3 \
+--nhead 4 \
+--dropout 0.2 \
 --epochs 30
 ```
 
@@ -123,17 +136,19 @@ python train.py \
 
   Parameter          Description
   ------------------ -----------------------------------
-  ``` bash
   `--model`          Select model architecture
   `--cnn_channels`   CNN layer sizes
-  `--rnn_hidden`     Hidden size for RNN layers
+  `--rnn_hidden`     Hidden size (RNN models)
   `--rnn_layers`     Number of RNN layers
+  `--d_model`        Transformer embedding size
+  `--num_layers`     Transformer encoder layers
+  `--nhead`          Number of attention heads
   `--dropout`        Dropout rate
   `--window_size`    Sliding window size
   `--overlap`        Sliding window overlap ratio
   `--split_mode`     `folder` or `random_epoch`
   `--split_ratio`    Train/Test ratio for random_epoch
-  ```
+
 ------------------------------------------------------------------------
 
 # 📊 Outputs

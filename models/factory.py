@@ -6,7 +6,7 @@ from models.cnn_gru import CNN_GRU
 from models.cnn_bilstm import CNN_BiLSTM
 from models.cnn_bilstm_att import CNN_BiLSTM_Att
 from models.tcn import TCN
-
+from models.transformer import TransformerClassifier
 
 def build_model(cfg):
 
@@ -26,7 +26,15 @@ def build_model(cfg):
         "cnn_bilstm_att": CNN_BiLSTM_Att,
         "tcn": TCN
     }
-
+    
+    if name == "transformer":
+        return TransformerClassifier(
+            hidden=h,
+            num_layers=layers,
+            nhead=cfg["model"]["nhead"],
+            dropout=dropout
+        )
+    
     if name not in models:
         raise ValueError("Unknown model")
 

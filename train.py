@@ -18,6 +18,10 @@ def parse_args():
     p.add_argument("--train_dirs", nargs="+", required=True)
     p.add_argument("--test_dirs", nargs="*", default=[])
 
+    p.add_argument("--d_model", type=int, default=128)
+    p.add_argument("--nhead", type=int, default=4)
+    p.add_argument("--num_layers", type=int, default=3)
+
     p.add_argument("--rnn_layers", type=int, default=1)
     p.add_argument("--dropout", type=float, default=0.0)
 
@@ -126,9 +130,10 @@ def main(args):
         "model": {
             "name": args.model,
             "cnn_channels": args.cnn_channels,
-            "rnn_hidden": args.rnn_hidden,
-            "rnn_layers": args.rnn_layers,
-            "dropout": args.dropout
+            "rnn_hidden": args.d_model,   # transformer dùng d_model
+            "rnn_layers": args.num_layers,
+            "dropout": args.dropout,
+            "nhead": args.nhead
         }
     }
 
