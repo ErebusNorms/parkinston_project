@@ -89,7 +89,7 @@ conda env export > environment.yml
 python train.py \
 --data_root data/leicester_dataset \
 --train_dirs A1 A2 \
---test_dirs B1 B2 \
+--test_dirs A3 A4 \
 --split_mode folder \
 --model cnn_bilstm_att \
 --cnn_channels 64 128 256 \
@@ -105,7 +105,7 @@ python train.py \
 python train.py \
 --data_root data/leicester_dataset \
 --train_dirs A1 A2 \
---test_dirs B1 B2 \
+--test_dirs A3 A4 \
 --split_mode folder \
 --model transformer \
 --d_model 128 \
