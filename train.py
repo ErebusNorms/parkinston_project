@@ -10,6 +10,7 @@ from datasets.leicester_dataset import LeicesterDataset
 from models.factory import build_model
 from trainers.lightning_module import EEGTrainer
 
+from torch.utils.data import random_split
 
 def parse_args():
     p = argparse.ArgumentParser()
@@ -107,6 +108,25 @@ def main(args):
     # DATALOADER
     # ===============================
 
+    val_ratio = 0.1
+    val_size = int(len(train_ds) * val_ratio)
+    train_size = len(train_ds) - val_size
+
+    train_ds, val_ds = random_split(
+        train_ds,
+        [train_size, val_size],
+        generator=torch.Generator().manual_seed(42)
+    )
+
+
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=args.batch_size,
+        num_workers=2,
+        persistent_workers=True
+    )
+
+
     train_loader = DataLoader(
         train_ds,
         batch_size=args.batch_size,
@@ -168,10 +188,11 @@ def main(args):
         max_epochs=args.epochs,
         accelerator="auto",
         logger=logger,
-        callbacks=[checkpoint_callback, early_stop]
+        callbacks=[checkpoint_callback, early_stop],
+        gradient_clip_val=1.0
     )
 
-    trainer.fit(lit_model, train_loader)
+    trainer.fit(lit_model, train_loader, val_loader)
     trainer.test(lit_model, test_loader)
 
 
