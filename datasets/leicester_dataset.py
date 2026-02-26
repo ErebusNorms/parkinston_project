@@ -27,42 +27,74 @@ class LeicesterDataset(Dataset):
                  overlap=0.25,
                  split_mode="folder",
                  split_ratio=0.8,
-                 split_part="train"):  # train | test
+                 split_part="train"):
 
         self.window_size = window_size
-        self.step = int(window_size * (1 - overlap))
+        self.step = max(1, int(window_size * (1 - overlap)))
 
         self.index_map = []
         self.file_labels = {}
+
+        skipped = 0
+        valid_files = 0
 
         for folder in selected_dirs:
 
             folder_path = os.path.join(root_dir, folder)
 
             if not os.path.exists(folder_path):
+                print(f"[Skip folder not found] {folder_path}")
                 continue
 
-            # label
+            # Determine label
             if folder in ACTIVE_GROUP:
                 label = 1
             elif folder in SHAM_GROUP:
                 label = 0
             else:
+                print(f"[Skip unknown group] {folder}")
                 continue
 
             for f in os.listdir(folder_path):
 
+                file_path = os.path.join(folder_path, f)
+
+                # Skip directories
+                if os.path.isdir(file_path):
+                    continue
+
+                # Skip files with extension (csv, txt, etc.)
                 if "." in f:
                     continue
 
-                file_path = os.path.join(folder_path, f)
+                # Skip empty files
+                if os.path.getsize(file_path) == 0:
+                    skipped += 1
+                    continue
 
-                with open(file_path, "rb") as fp:
-                    data = pickle.load(fp)
+                # Safe load
+                try:
+                    with open(file_path, "rb") as fp:
+                        data = pickle.load(fp)
+                except Exception:
+                    skipped += 1
+                    continue
 
-                data = np.array(data)
+                # Convert MNE object if needed
+                if hasattr(data, "get_data"):
+                    try:
+                        data = data.get_data()
+                    except Exception:
+                        skipped += 1
+                        continue
 
-                # handle shape
+                try:
+                    data = np.array(data)
+                except Exception:
+                    skipped += 1
+                    continue
+
+                # Check shape
                 if data.shape == (520, 512):
                     num_epochs = 520
                     epoch_axis = 0
@@ -70,18 +102,22 @@ class LeicesterDataset(Dataset):
                     num_epochs = 520
                     epoch_axis = 1
                 else:
+                    skipped += 1
                     continue
 
+                if np.isnan(data).any():
+                    skipped += 1
+                    continue
+
+                valid_files += 1
                 self.file_labels[file_path] = label
 
-                # -------- Epoch-level split --------
+                # Epoch split
                 epoch_indices = list(range(num_epochs))
 
                 if split_mode == "random_epoch":
-
                     np.random.seed(42)
                     np.random.shuffle(epoch_indices)
-
                     split_point = int(len(epoch_indices) * split_ratio)
 
                     if split_part == "train":
@@ -89,7 +125,7 @@ class LeicesterDataset(Dataset):
                     else:
                         epoch_indices = epoch_indices[split_point:]
 
-                # -------- Sliding window --------
+                # Sliding window
                 for epoch_idx in epoch_indices:
 
                     if epoch_axis == 0:
@@ -106,6 +142,8 @@ class LeicesterDataset(Dataset):
                             (file_path, epoch_idx, start)
                         )
 
+        print("Valid files:", valid_files)
+        print("Skipped files:", skipped)
         print("Total windows:", len(self.index_map))
 
         self._cache_file = None
@@ -118,8 +156,13 @@ class LeicesterDataset(Dataset):
         if self._cache_file != file_path:
             with open(file_path, "rb") as fp:
                 data = pickle.load(fp)
+
+            if hasattr(data, "get_data"):
+                data = data.get_data()
+
             self._cache_data = np.array(data)
             self._cache_file = file_path
+
         return self._cache_data
 
     def __getitem__(self, idx):
@@ -133,10 +176,10 @@ class LeicesterDataset(Dataset):
         else:
             signal = data[:, epoch_idx]
 
-        label = self.file_labels[file_path]
         x = signal[start:start+self.window_size]
+        label = self.file_labels[file_path]
 
         return (
-            torch.tensor(x).unsqueeze(0).float(),
-            torch.tensor(label).long()
+            torch.tensor(x, dtype=torch.float32).unsqueeze(0),
+            torch.tensor(label, dtype=torch.long)
         )
