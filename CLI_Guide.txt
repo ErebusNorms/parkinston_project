@@ -1,0 +1,92 @@
+1️⃣ CNN
+python train.py ^
+--data_root data\leicester_dataset ^
+--train_dirs A1 ^
+--split_mode random_epoch ^
+--model cnn ^
+--cnn_channels 32 64 128 ^
+--use_global_pool True ^
+--dense_hidden 64 ^
+--dropout 0.3 ^
+--epochs 1
+
+2️⃣ LSTM
+python train.py ^
+--data_root data\leicester_dataset ^
+--train_dirs A1 ^
+--split_mode random_epoch ^
+--model lstm ^
+--rnn_type lstm ^
+--rnn_hidden 64 ^
+--rnn_layers 3 ^
+--dense_hidden 64 ^
+--dropout 0.3 ^
+--epochs 1
+
+3️⃣ GRU
+python train.py ^
+--data_root data\leicester_dataset ^
+--train_dirs A1 ^
+--split_mode random_epoch ^
+--model gru ^
+--rnn_type gru ^
+--rnn_hidden 64 ^
+--rnn_layers 3 ^
+--dense_hidden 64 ^
+--dropout 0.3 ^
+--epochs 1
+
+4️⃣ BiLSTM
+python train.py ^
+--data_root data\leicester_dataset ^
+--train_dirs A1 ^
+--split_mode random_epoch ^
+--model bilstm ^
+--rnn_type bilstm ^
+--rnn_hidden 64 ^
+--rnn_layers 3 ^
+--dense_hidden 64 ^
+--dropout 0.3 ^
+--epochs 1
+
+5️⃣ CNN + LSTM
+python train.py ^
+--data_root data\leicester_dataset ^
+--train_dirs A1 ^
+--split_mode random_epoch ^
+--model cnn_lstm ^
+--cnn_channels 32 64 128 ^
+--rnn_type lstm ^
+--rnn_hidden 64 ^
+--rnn_layers 1 ^
+--dense_hidden 64 ^
+--dropout 0.3 ^
+--epochs 1
+
+6️⃣ CNN + GRU
+python train.py ^
+--data_root data\leicester_dataset ^
+--train_dirs A1 ^
+--split_mode random_epoch ^
+--model cnn_gru ^
+--cnn_channels 32 64 128 ^
+--rnn_type gru ^
+--rnn_hidden 64 ^
+--rnn_layers 1 ^
+--dense_hidden 64 ^
+--dropout 0.3 ^
+--epochs 1
+
+7️⃣ CNN + BiLSTM
+python train.py ^
+--data_root data\leicester_dataset ^
+--train_dirs A1 ^
+--split_mode random_epoch ^
+--model cnn_bilstm ^
+--cnn_channels 32 64 128 ^
+--rnn_type bilstm ^
+--rnn_hidden 64 ^
+--rnn_layers 1 ^
+--dense_hidden 64 ^
+--dropout 0.3 ^
+--epochs 1

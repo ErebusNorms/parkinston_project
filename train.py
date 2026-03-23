@@ -11,7 +11,7 @@ from models.factory import build_model
 from trainers.lightning_module import EEGTrainer
 
 from torch.utils.data import random_split
-
+from torchinfo import summary
 def parse_args():
     p = argparse.ArgumentParser()
 
@@ -36,13 +36,18 @@ def parse_args():
     p.add_argument("--window_size", type=int, default=64)
     p.add_argument("--overlap", type=float, default=0.25)
 
-    p.add_argument("--batch_size", type=int, default=64)
+    p.add_argument("--batch_size", type=int, default=256)
     p.add_argument("--epochs", type=int, default=30)
     p.add_argument("--lr", type=float, default=1e-3)
 
     p.add_argument("--model", required=True)
     p.add_argument("--cnn_channels", nargs="+", type=int, default=[32,64,128])
     p.add_argument("--rnn_hidden", type=int, default=64)
+
+    p.add_argument("--rnn_type", default="lstm")
+    p.add_argument("--dense_hidden", type=int, default=64)
+    p.add_argument("--use_global_pool", type=bool, default=True)
+
 
     return p.parse_args()
 
@@ -150,14 +155,24 @@ def main(args):
         "model": {
             "name": args.model,
             "cnn_channels": args.cnn_channels,
-            "rnn_hidden": args.d_model,   # transformer dùng d_model
-            "rnn_layers": args.num_layers,
+            "rnn_hidden": args.rnn_hidden,
+            "rnn_layers": args.rnn_layers,
+            "rnn_type": args.rnn_type,
             "dropout": args.dropout,
-            "nhead": args.nhead
+            "dense_hidden": args.dense_hidden,
+            "use_global_pool": args.use_global_pool
         }
     }
 
     model = build_model(cfg)
+
+    summary(
+        model,
+        input_size=(1,1,args.window_size),
+        col_names=["input_size", "output_size", "num_params"]
+    )
+
+
     lit_model = EEGTrainer(model, lr=args.lr)
 
     # ===============================
@@ -194,6 +209,22 @@ def main(args):
 
     trainer.fit(lit_model, train_loader, val_loader)
     trainer.test(lit_model, test_loader)
+    trainer.test(lit_model, test_loader)
+
+    metrics = trainer.callback_metrics
+
+    import pandas as pd
+
+    df = pd.DataFrame([{
+        "test_acc": metrics["test_acc"].item(),
+        "test_bal_acc": metrics["test_bal_acc"].item(),
+        "test_f1": metrics["test_f1"].item(),
+        "test_precision": metrics["test_precision"].item(),
+        "test_recall": metrics["test_recall"].item(),
+        "test_kappa": metrics["test_kappa"].item(),
+    }])
+
+    df.to_csv(f"logs/{args.model}/test_results.csv", index=False)
 
 
 if __name__ == "__main__":
