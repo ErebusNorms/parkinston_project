@@ -1,7 +1,7 @@
 1️⃣ CNN
 python train.py ^
 --data_root data\leicester_dataset ^
---train_dirs A1 ^
+--train_dirs A9 B1 B3 B6 C16 C6 C8 ^
 --split_mode random_epoch ^
 --model cnn ^
 --cnn_channels 32 64 128 ^
