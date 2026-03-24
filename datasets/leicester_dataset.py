@@ -32,8 +32,12 @@ class LeicesterDataset(Dataset):
         self.window_size = window_size
         self.step = max(1, int(window_size * (1 - overlap)))
 
-        self.index_map = []
-        self.file_labels = {}
+        # --- Pre-load all data into RAM ---
+        # data_store[file_id] = numpy array with shape (520, 512), dtype float32
+        # label_store[file_id] = int label (0 or 1)
+        self.data_store = []
+        self.label_store = []
+        self.index_map = []   # list of (file_id, epoch_idx, start)
 
         skipped = 0
         valid_files = 0
@@ -94,13 +98,11 @@ class LeicesterDataset(Dataset):
                     skipped += 1
                     continue
 
-                # Check shape
+                # Check shape — normalize to (520, 512)
                 if data.shape == (520, 512):
-                    num_epochs = 520
-                    epoch_axis = 0
+                    pass
                 elif data.shape == (512, 520):
-                    num_epochs = 520
-                    epoch_axis = 1
+                    data = data.T
                 else:
                     skipped += 1
                     continue
@@ -110,10 +112,14 @@ class LeicesterDataset(Dataset):
                     continue
 
                 valid_files += 1
-                self.file_labels[file_path] = label
+
+                # Store data in memory as float32 and assign an integer ID
+                file_id = len(self.data_store)
+                self.data_store.append(data.astype(np.float32))
+                self.label_store.append(label)
 
                 # Epoch split
-                epoch_indices = list(range(num_epochs))
+                epoch_indices = list(range(520))
 
                 if split_mode == "random_epoch":
                     np.random.seed(42)
@@ -125,61 +131,35 @@ class LeicesterDataset(Dataset):
                     else:
                         epoch_indices = epoch_indices[split_point:]
 
-                # Sliding window
+                # Sliding window index
                 for epoch_idx in epoch_indices:
-
-                    if epoch_axis == 0:
-                        signal = data[epoch_idx]
-                    else:
-                        signal = data[:, epoch_idx]
-
                     for start in range(
                         0,
                         512 - window_size + 1,
                         self.step
                     ):
                         self.index_map.append(
-                            (file_path, epoch_idx, start)
+                            (file_id, epoch_idx, start)
                         )
 
         print("Valid files:", valid_files)
         print("Skipped files:", skipped)
         print("Total windows:", len(self.index_map))
-
-        self._cache_file = None
-        self._cache_data = None
+        mem_mb = sum(d.nbytes for d in self.data_store) / (1024 * 1024)
+        print(f"Data pre-loaded into RAM: {mem_mb:.1f} MB")
 
     def __len__(self):
         return len(self.index_map)
 
-    def _load_file(self, file_path):
-        if self._cache_file != file_path:
-            with open(file_path, "rb") as fp:
-                data = pickle.load(fp)
-
-            if hasattr(data, "get_data"):
-                data = data.get_data()
-
-            self._cache_data = np.array(data)
-            self._cache_file = file_path
-
-        return self._cache_data
-
     def __getitem__(self, idx):
 
-        file_path, epoch_idx, start = self.index_map[idx]
+        file_id, epoch_idx, start = self.index_map[idx]
 
-        data = self._load_file(file_path)
-
-        if data.shape == (520, 512):
-            signal = data[epoch_idx]
-        else:
-            signal = data[:, epoch_idx]
-
-        x = signal[start:start+self.window_size]
-        label = self.file_labels[file_path]
+        # Pure in-memory array slicing — no disk I/O
+        x = self.data_store[file_id][epoch_idx, start:start+self.window_size]
+        label = self.label_store[file_id]
 
         return (
-            torch.tensor(x, dtype=torch.float32).unsqueeze(0),
+            torch.from_numpy(x).unsqueeze(0),
             torch.tensor(label, dtype=torch.long)
         )
