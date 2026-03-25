@@ -12,8 +12,26 @@ from trainers.lightning_module import EEGTrainer
 
 from torch.utils.data import random_split
 from torchinfo import summary
+
+import random
+import numpy as np
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    # đảm bảo reproducible
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+
 def parse_args():
     p = argparse.ArgumentParser()
+
+    p.add_argument("--seed", type=int, default=42)
 
     p.add_argument("--data_root", required=True)
     p.add_argument("--train_dirs", nargs="+", required=True)
@@ -57,7 +75,8 @@ def main(args):
     # ===============================
     # SPLIT LOGIC
     # ===============================
-
+    set_seed(args.seed)
+    
     if args.split_mode == "folder":
 
         train_ds = LeicesterDataset(
@@ -65,7 +84,8 @@ def main(args):
             args.train_dirs,
             window_size=args.window_size,
             overlap=args.overlap,
-            split_mode="folder"
+            split_mode="folder",
+            seed=args.seed
         )
 
         test_ds = LeicesterDataset(
@@ -73,7 +93,8 @@ def main(args):
             args.test_dirs,
             window_size=args.window_size,
             overlap=args.overlap,
-            split_mode="folder"
+            split_mode="folder",
+            seed=args.seed
         )
 
     elif args.split_mode == "random_epoch":
@@ -131,11 +152,13 @@ def main(args):
         persistent_workers=True
     )
 
-
+    g = torch.Generator()
+    g.manual_seed(args.seed)
     train_loader = DataLoader(
         train_ds,
         batch_size=args.batch_size,
         shuffle=True,
+        generator=g,
         num_workers=2,
         persistent_workers=True
     )
@@ -202,6 +225,7 @@ def main(args):
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         accelerator="auto",
+        deterministic=True,
         logger=logger,
         callbacks=[checkpoint_callback, early_stop],
         gradient_clip_val=1.0

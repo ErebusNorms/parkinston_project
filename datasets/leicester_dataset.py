@@ -27,8 +27,9 @@ class LeicesterDataset(Dataset):
                  overlap=0.25,
                  split_mode="folder",
                  split_ratio=0.8,
-                 split_part="train"):
-
+                 split_part="train",
+                 seed=42):
+        self.seed = seed
         self.window_size = window_size
         self.step = max(1, int(window_size * (1 - overlap)))
 
@@ -122,8 +123,9 @@ class LeicesterDataset(Dataset):
                 epoch_indices = list(range(520))
 
                 if split_mode == "random_epoch":
-                    np.random.seed(42)
-                    np.random.shuffle(epoch_indices)
+                    rng = np.random.RandomState(self.seed)
+                    rng.shuffle(epoch_indices)
+                    # np.random.shuffle(epoch_indices)
                     split_point = int(len(epoch_indices) * split_ratio)
 
                     if split_part == "train":

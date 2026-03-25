@@ -9,11 +9,14 @@ import os
 DATA_ROOT = "data/leicester_dataset"
 TRAIN_DIRS = ['A10', 'A11', 'A14', 'A15', 'A16', 'A3', 'A7', 'A8', 'A9', 'B1', 'B11', 'B12','B13', 'B15', 'B16', 'B3', 'B4', 'B6', 'B8', 'B9', 'C1', 'C10', 'C13', 'C14', 'C16', 'C17','C2', 'C3', 'C5', 'C6', 'C8', 'C9']
 
+# ["A9", "B1", "B3", "B6", "C16", "C6", "C8"]
+
 COMMON_ARGS = [
     "--data_root", DATA_ROOT,
     "--train_dirs", *TRAIN_DIRS,
     "--split_mode", "random_epoch",
-    "--epochs", "15"
+    "--epochs", "15",
+    "--seed", "42"
 ]
 
 # ========================
