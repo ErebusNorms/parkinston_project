@@ -2,6 +2,10 @@ import argparse
 import os
 import torch
 import pytorch_lightning as pl
+
+import random
+import numpy as np
+
 from torch.utils.data import DataLoader
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import CSVLogger
@@ -13,29 +17,23 @@ from trainers.lightning_module import EEGTrainer
 from torch.utils.data import random_split
 from torchinfo import summary
 
-import random
-import numpy as np
-
-def set_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-
-    # đảm bảo reproducible
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
 
 
 def parse_args():
     p = argparse.ArgumentParser()
 
-    p.add_argument("--seed", type=int, default=42)
-
     p.add_argument("--data_root", required=True)
     p.add_argument("--train_dirs", nargs="+", required=True)
     p.add_argument("--test_dirs", nargs="*", default=[])
+
+    p.add_argument("--seed", type=int, default=42)
+
+    p.add_argument(
+        "--norm",
+        type=str,
+        default="none",
+        choices=["none", "batch", "layer", "group", "instance", "switch"]
+    )
 
     p.add_argument("--d_model", type=int, default=128)
     p.add_argument("--nhead", type=int, default=4)
@@ -69,14 +67,25 @@ def parse_args():
 
     return p.parse_args()
 
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 
 def main(args):
+
+
+    set_seed(args.seed)
 
     # ===============================
     # SPLIT LOGIC
     # ===============================
-    set_seed(args.seed)
-    
+
     if args.split_mode == "folder":
 
         train_ds = LeicesterDataset(
@@ -84,17 +93,21 @@ def main(args):
             args.train_dirs,
             window_size=args.window_size,
             overlap=args.overlap,
-            split_mode="folder",
-            seed=args.seed
+            split_mode="random_epoch",
+            split_ratio=args.split_ratio,
+            split_part="train",
+            seed=args.seed   # 👈 thêm
         )
 
         test_ds = LeicesterDataset(
             args.data_root,
-            args.test_dirs,
+            args.train_dirs,
             window_size=args.window_size,
             overlap=args.overlap,
-            split_mode="folder",
-            seed=args.seed
+            split_mode="random_epoch",
+            split_ratio=args.split_ratio,
+            split_part="test",
+            seed=args.seed   # 👈 thêm
         )
 
     elif args.split_mode == "random_epoch":
@@ -141,7 +154,7 @@ def main(args):
     train_ds, val_ds = random_split(
         train_ds,
         [train_size, val_size],
-        generator=torch.Generator().manual_seed(42)
+        generator=torch.Generator().manual_seed(args.seed)
     )
 
 
@@ -154,6 +167,7 @@ def main(args):
 
     g = torch.Generator()
     g.manual_seed(args.seed)
+
     train_loader = DataLoader(
         train_ds,
         batch_size=args.batch_size,
@@ -182,6 +196,7 @@ def main(args):
             "rnn_layers": args.rnn_layers,
             "rnn_type": args.rnn_type,
             "dropout": args.dropout,
+            "norm": args.norm,
             "dense_hidden": args.dense_hidden,
             "use_global_pool": args.use_global_pool
         }
@@ -225,14 +240,14 @@ def main(args):
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         accelerator="auto",
-        deterministic=True,
         logger=logger,
+        deterministic="warn",
         callbacks=[checkpoint_callback, early_stop],
         gradient_clip_val=1.0
     )
 
     trainer.fit(lit_model, train_loader, val_loader)
-    trainer.test(lit_model, test_loader)
+    trainer.test(lit_model, val_loader)
     trainer.test(lit_model, test_loader)
 
     metrics = trainer.callback_metrics

@@ -125,7 +125,6 @@ class LeicesterDataset(Dataset):
                 if split_mode == "random_epoch":
                     rng = np.random.RandomState(self.seed)
                     rng.shuffle(epoch_indices)
-                    # np.random.shuffle(epoch_indices)
                     split_point = int(len(epoch_indices) * split_ratio)
 
                     if split_part == "train":

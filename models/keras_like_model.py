@@ -1,5 +1,6 @@
 import torch.nn as nn
 from models.keras_like_blocks import KerasRNNStack, KerasCNN
+from models.norms import get_norm
 
 class KerasLikeModel(nn.Module):
 
@@ -7,14 +8,23 @@ class KerasLikeModel(nn.Module):
         super().__init__()
 
         model_type = cfg["name"].lower()
-
         self.model_type = model_type
 
+        self.use_cnn = model_type in [
+            "cnn", "cnn_lstm", "cnn_gru", "cnn_bilstm"
+        ]
+
+        self.use_rnn = model_type in [
+            "lstm", "gru", "bilstm",
+            "cnn_lstm", "cnn_gru", "cnn_bilstm"
+        ]
+
         # ================= CNN =================
-        if model_type in ["cnn", "cnn_lstm", "cnn_gru", "cnn_bilstm"]:
+        if self.use_cnn:
             self.cnn = KerasCNN(
                 cfg["cnn_channels"],
-                cfg["use_global_pool"]
+                cfg["use_global_pool"],
+                norm=cfg["norm"]
             )
             cnn_out = cfg["cnn_channels"][-1]
         else:
@@ -22,47 +32,30 @@ class KerasLikeModel(nn.Module):
             cnn_out = 1
 
         # ================= RNN =================
-        if model_type == "lstm":
-            self.rnn = KerasRNNStack("lstm", 1,
-                                    cfg["rnn_hidden"],
-                                    cfg["rnn_layers"],
-                                    cfg["dropout"])
-            fc_in = cfg["rnn_hidden"]
+        if self.use_rnn:
 
-        elif model_type == "gru":
-            self.rnn = KerasRNNStack("gru", 1,
-                                    cfg["rnn_hidden"],
-                                    cfg["rnn_layers"],
-                                    cfg["dropout"])
-            fc_in = cfg["rnn_hidden"]
+            if "bilstm" in model_type:
+                rnn_type = "bilstm"
+                rnn_out = cfg["rnn_hidden"] * 2
+            elif "gru" in model_type:
+                rnn_type = "gru"
+                rnn_out = cfg["rnn_hidden"]
+            else:
+                rnn_type = "lstm"
+                rnn_out = cfg["rnn_hidden"]
 
-        elif model_type == "bilstm":
-            self.rnn = KerasRNNStack("bilstm", 1,
-                                    cfg["rnn_hidden"],
-                                    cfg["rnn_layers"],
-                                    cfg["dropout"])
-            fc_in = cfg["rnn_hidden"] * 2
+            input_size = cnn_out if self.use_cnn else 1
 
-        elif model_type == "cnn_lstm":
-            self.rnn = KerasRNNStack("lstm", cnn_out,
-                                    cfg["rnn_hidden"],
-                                    cfg["rnn_layers"],
-                                    cfg["dropout"])
-            fc_in = cfg["rnn_hidden"]
+            self.rnn = KerasRNNStack(
+                rnn_type,
+                input_size,
+                cfg["rnn_hidden"],
+                cfg["rnn_layers"],
+                cfg["dropout"],
+                norm=cfg["norm"]   # 🔥 thêm dòng này
+            )
 
-        elif model_type == "cnn_gru":
-            self.rnn = KerasRNNStack("gru", cnn_out,
-                                    cfg["rnn_hidden"],
-                                    cfg["rnn_layers"],
-                                    cfg["dropout"])
-            fc_in = cfg["rnn_hidden"]
-
-        elif model_type == "cnn_bilstm":
-            self.rnn = KerasRNNStack("bilstm", cnn_out,
-                                    cfg["rnn_hidden"],
-                                    cfg["rnn_layers"],
-                                    cfg["dropout"])
-            fc_in = cfg["rnn_hidden"] * 2
+            fc_in = rnn_out
 
         else:
             self.rnn = None
@@ -71,6 +64,7 @@ class KerasLikeModel(nn.Module):
         # ================= HEAD =================
         self.fc = nn.Sequential(
             nn.Linear(fc_in, cfg["dense_hidden"]),
+            get_norm(cfg["norm"], cfg["dense_hidden"], dim="fc"),
             nn.ReLU(),
             nn.Dropout(cfg["dropout"]),
             nn.Linear(cfg["dense_hidden"], 2)
@@ -80,21 +74,25 @@ class KerasLikeModel(nn.Module):
 
         # x: (B,1,T)
 
-        if self.cnn is not None:
-            x = self.cnn(x)
+        # ===== CNN =====
+        if self.use_cnn:
+            x = self.cnn(x)      # (B,C)
 
-            if x.dim() == 2:
-                x = x.unsqueeze(1)
+        # ===== reshape cho RNN =====
+        if self.use_rnn:
 
-        else:
-            x = x.permute(0, 2, 1)
+            if self.use_cnn:
+                # CNN output (B, C) → (B, 1, C)
+                if x.dim() == 2:
+                    x = x.unsqueeze(1)
 
-        if self.rnn is not None:
+            else:
+                # raw signal (B,1,T) → (B,T,1)
+                x = x.permute(0, 2, 1)
+
             x = self.rnn(x)
 
+        # ===== FC =====
         x = self.fc(x)
-
-        if x.dim() == 3:
-            x = x.squeeze(1)
 
         return x
