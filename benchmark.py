@@ -67,14 +67,13 @@ MODELS = [
     ]),
 ]
 
-NORMS = ["none"] # ["none", "batch", "layer", "group", "instance", "switch"]
-
-SEEDS = [42]
-
-WINDOW_SIZES = [64]
+NORMS = ["none", "batch", "layer"] # ["none", "batch", "layer", "group", "instance", "switch"]
+SEEDS = [42, 12, 34]
+WINDOW_SIZES = [64, 128, 256]
 OVERLAPS = [0.5]
+BATCH_SIZE = [512]
+EPOCHS = 50
 
-EPOCHS = 1
 
 # ========================
 # RUN
@@ -86,41 +85,43 @@ for seed in SEEDS:
     for norm in NORMS:
         for ws in WINDOW_SIZES:
             for ov in OVERLAPS:
-                for model_name, model_args in MODELS:
+                for bs in BATCH_SIZE:
+                    for model_name, model_args in MODELS:
 
-                    print(f"\n===== RUN =====")
-                    print(f"{model_name} | norm={norm} | seed={seed} | ws={ws} | ov={ov}")
+                        print(f"\n===== RUN =====")
+                        print(f"{model_name} | norm={norm} | seed={seed} | ws={ws} | ov={ov}")
 
-                    cmd = [
-                        "python", "train.py",
-                        "--data_root", DATA_ROOT,
-                        "--train_dirs", *TRAIN_DIRS,
-                        "--split_mode", "random_epoch",
-                        "--epochs", str(EPOCHS),
-                        "--seed", str(seed),
-                        "--norm", norm,
-                        "--window_size", str(ws),
-                        "--overlap", str(ov),
-                    ] + model_args
+                        cmd = [
+                            "python", "train.py",
+                            "--data_root", DATA_ROOT,
+                            "--train_dirs", *TRAIN_DIRS,
+                            "--split_mode", "random_epoch",
+                            "--epochs", str(EPOCHS),
+                            "--batch_size", str(bs),
+                            "--seed", str(seed),
+                            "--norm", norm,
+                            "--window_size", str(ws),
+                            "--overlap", str(ov),
+                        ] + model_args
 
-                    subprocess.run(cmd)
+                        subprocess.run(cmd)
 
-                    # ===== load result =====
-                    path = f"logs/{model_name}/test_results.csv"
+                        # ===== load result =====
+                        path = f"logs/{model_name}/test_results.csv"
 
-                    if os.path.exists(path):
-                        df = pd.read_csv(path)
-                        row = df.iloc[0].to_dict()
+                        if os.path.exists(path):
+                            df = pd.read_csv(path)
+                            row = df.iloc[0].to_dict()
 
-                        row.update({
-                            "model": model_name,
-                            "norm": norm,
-                            "seed": seed,
-                            "window_size": ws,
-                            "overlap": ov
-                        })
+                            row.update({
+                                "model": model_name,
+                                "norm": norm,
+                                "seed": seed,
+                                "window_size": ws,
+                                "overlap": ov
+                            })
 
-                        results.append(row)
+                            results.append(row)
 
 # ========================
 # RAW RESULT
