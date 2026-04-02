@@ -44,7 +44,7 @@ class KerasLikeModel(nn.Module):
                 rnn_type = "lstm"
                 rnn_out = cfg["rnn_hidden"]
 
-            input_size = cnn_out if self.use_cnn else 1
+            input_size = cnn_out
 
             self.rnn = KerasRNNStack(
                 rnn_type,
@@ -71,19 +71,21 @@ class KerasLikeModel(nn.Module):
         )
 
     def forward(self, x):
-
-        # x: (B,1,T)
-
         # ===== CNN =====
         if self.use_cnn:
-            x = self.cnn(x)      # (B,C)
+            x = self.cnn(x)
 
         # ===== reshape cho RNN =====
         if self.use_rnn:
 
             if self.use_cnn:
-                # CNN output (B, C) → (B, 1, C)
-                if x.dim() == 2:
+
+                if x.dim() == 3:
+                    # (B, C, T) → (B, T, C)
+                    x = x.permute(0, 2, 1)
+
+                elif x.dim() == 2:
+                    # (B, C) → (B, 1, C)
                     x = x.unsqueeze(1)
 
             else:

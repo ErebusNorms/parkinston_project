@@ -8,7 +8,7 @@ import os
 
 DATA_ROOT = "data/leicester_dataset"
 
-TRAIN_DIRS = ["A9", "B1", "B3", "B6", "C16", "C6", "C8"]
+TRAIN_DIRS = ['A10', 'A11', 'A14', 'A15', 'A16', 'A3', 'A7', 'A8', 'A9', 'B1', 'B11', 'B12','B13', 'B15', 'B16', 'B3', 'B4', 'B6', 'B8', 'B9', 'C1', 'C10', 'C13', 'C14', 'C16', 'C17','C2', 'C3', 'C5', 'C6', 'C8', 'C9']
 
 # ========================
 # SEARCH SPACE
@@ -89,7 +89,7 @@ for seed in SEEDS:
                     for model_name, model_args in MODELS:
 
                         print(f"\n===== RUN =====")
-                        print(f"{model_name} | norm={norm} | seed={seed} | ws={ws} | ov={ov}")
+                        print(f"{model_name} | norm={norm} | seed={seed} | ws={ws} | ov={ov} | bs={bs}")
 
                         cmd = [
                             "python", "train.py",

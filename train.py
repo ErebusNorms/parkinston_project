@@ -17,6 +17,13 @@ from trainers.lightning_module import EEGTrainer
 from torch.utils.data import random_split
 from torchinfo import summary
 
+import pandas as pd
+
+import json
+from datetime import datetime
+
+
+
 
 
 def parse_args():
@@ -62,8 +69,7 @@ def parse_args():
 
     p.add_argument("--rnn_type", default="lstm")
     p.add_argument("--dense_hidden", type=int, default=64)
-    p.add_argument("--use_global_pool", type=bool, default=True)
-
+    p.add_argument("--use_global_pool", choices=["true","false"], default="false")
 
     return p.parse_args()
 
@@ -81,12 +87,46 @@ def main(args):
 
 
     set_seed(args.seed)
+    run_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_seed{args.seed}"
+
+    log_dir = os.path.join("logs", args.model, run_id)
+    os.makedirs(log_dir, exist_ok=True)
+
+    # save config
+    with open(os.path.join(log_dir, "config.json"), "w") as f:
+        json.dump(vars(args), f, indent=4)
 
     # ===============================
     # SPLIT LOGIC
     # ===============================
 
     if args.split_mode == "folder":
+
+        train_ds = LeicesterDataset(
+            args.data_root,
+            args.train_dirs,
+            window_size=args.window_size,
+            overlap=args.overlap,
+            split_mode="folder",
+            split_ratio=args.split_ratio,
+            split_part="train",
+            seed=args.seed   # 👈 thêm
+        )
+
+        test_ds = LeicesterDataset(
+            args.data_root,
+            args.train_dirs,
+            window_size=args.window_size,
+            overlap=args.overlap,
+            split_mode="folder",
+            split_ratio=args.split_ratio,
+            split_part="test",
+            seed=args.seed   # 👈 thêm
+        )
+
+    elif args.split_mode == "random_epoch":
+
+        print("Using epoch-level random split")
 
         train_ds = LeicesterDataset(
             args.data_root,
@@ -108,30 +148,6 @@ def main(args):
             split_ratio=args.split_ratio,
             split_part="test",
             seed=args.seed   # 👈 thêm
-        )
-
-    elif args.split_mode == "random_epoch":
-
-        print("Using epoch-level random split")
-
-        train_ds = LeicesterDataset(
-            args.data_root,
-            args.train_dirs,
-            window_size=args.window_size,
-            overlap=args.overlap,
-            split_mode="random_epoch",
-            split_ratio=args.split_ratio,
-            split_part="train"
-        )
-
-        test_ds = LeicesterDataset(
-            args.data_root,
-            args.train_dirs,
-            window_size=args.window_size,
-            overlap=args.overlap,
-            split_mode="random_epoch",
-            split_ratio=args.split_ratio,
-            split_part="test"
         )
 
     else:
@@ -198,17 +214,17 @@ def main(args):
             "dropout": args.dropout,
             "norm": args.norm,
             "dense_hidden": args.dense_hidden,
-            "use_global_pool": args.use_global_pool
+            "use_global_pool": args.use_global_pool=="true"
         }
     }
 
     model = build_model(cfg)
 
-    summary(
-        model,
-        input_size=(1,1,args.window_size),
-        col_names=["input_size", "output_size", "num_params"]
-    )
+    # summary(
+    #     model,
+    #     input_size=(1,1,args.window_size),
+    #     col_names=["input_size", "output_size", "num_params"]
+    # )
 
 
     lit_model = EEGTrainer(model, lr=args.lr)
@@ -221,7 +237,7 @@ def main(args):
     ckpt_dir = os.path.join("checkpoints", args.model, run_name)
     os.makedirs(ckpt_dir, exist_ok=True)
 
-    logger = CSVLogger("logs", name=args.model)
+    logger = CSVLogger(save_dir=log_dir, name="")
 
     checkpoint_callback = ModelCheckpoint(
         dirpath=ckpt_dir,
@@ -247,24 +263,34 @@ def main(args):
     )
 
     trainer.fit(lit_model, train_loader, val_loader)
-    trainer.test(lit_model, val_loader)
-    trainer.test(lit_model, test_loader)
 
-    metrics = trainer.callback_metrics
+    val_results = trainer.test(lit_model, val_loader)
+    test_results = trainer.test(lit_model, test_loader)
 
-    import pandas as pd
+    val_metrics = val_results[0]
+    test_metrics = test_results[0]
+
 
     df = pd.DataFrame([{
-        "test_acc": metrics["test_acc"].item(),
-        "test_bal_acc": metrics["test_bal_acc"].item(),
-        "test_f1": metrics["test_f1"].item(),
-        "test_precision": metrics["test_precision"].item(),
-        "test_recall": metrics["test_recall"].item(),
-        "test_kappa": metrics["test_kappa"].item(),
+        "model": args.model,
+        "seed": args.seed,
+        "window_size": args.window_size,
+        "overlap": args.overlap,
+        "norm": args.norm,
+
+        "test_acc": test_metrics["test_acc"],
+        "test_bal_acc": test_metrics["test_bal_acc"],
+        "test_f1": test_metrics["test_f1"],
+        "test_precision": test_metrics["test_precision"],
+        "test_recall": test_metrics["test_recall"],
+        "test_kappa": test_metrics["test_kappa"],
     }])
 
-    df.to_csv(f"logs/{args.model}/test_results.csv", index=False)
-
+    df.to_csv(os.path.join(log_dir, "test_metrics.csv"), index=False)
+    pd.DataFrame([val_metrics]).to_csv(
+        os.path.join(log_dir, "val_metrics.csv"),
+        index=False
+    )
 
 if __name__ == "__main__":
     args = parse_args()

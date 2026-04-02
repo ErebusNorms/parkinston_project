@@ -74,15 +74,17 @@ class KerasCNN(nn.Module):
         for ch in channels:
             layers += [
                 nn.Conv1d(in_ch, ch, 3, padding=1),
-                get_norm(norm, ch, dim="1d"),
+                get_norm(norm, ch, dim="conv"),
                 nn.ReLU(),
                 nn.MaxPool1d(2)
             ]
             in_ch = ch
 
         if use_global_pool:
+            print("Đang sử dụng global average pooling")
             layers.append(nn.AdaptiveAvgPool1d(1))
-
+        else:
+            print("Không sử dụng global average pooling")
         self.net = nn.Sequential(*layers)
 
     def forward(self, x):

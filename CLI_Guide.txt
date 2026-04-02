@@ -5,7 +5,7 @@ python train.py ^
 --split_mode random_epoch ^
 --model cnn ^
 --cnn_channels 32 64 128 ^
---use_global_pool True ^
+--use_global_pool true ^
 --dense_hidden 64 ^
 --dropout 0.3 ^
 --epochs 1
