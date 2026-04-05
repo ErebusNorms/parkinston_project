@@ -18,7 +18,8 @@ MODELS = [
 
     ("cnn", [
         "--model", "cnn",
-        "--cnn_channels", "32", "64", "128"
+        "--cnn_channels", "32", "64", "128",
+        "--use_global_pool", "true"
     ]),
 
     ("lstm", [
@@ -67,12 +68,12 @@ MODELS = [
     ]),
 ]
 
-NORMS = ["none", "batch", "layer"] # ["none", "batch", "layer", "group", "instance", "switch"]
-SEEDS = [42, 12, 34]
-WINDOW_SIZES = [64, 128, 256]
+NORMS = ["batch"] # ["none", "batch", "layer", "group", "instance", "switch"]
+SEEDS = [42]
+WINDOW_SIZES = [64]
 OVERLAPS = [0.5]
 BATCH_SIZE = [512]
-EPOCHS = 50
+EPOCHS = 1
 
 
 # ========================

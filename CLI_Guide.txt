@@ -63,6 +63,24 @@ python train.py ^
 --dropout 0.3 ^
 --epochs 1
 
+
+python train.py ^
+--data_root data\leicester_dataset ^
+--train_dirs A9 B1 B3 B6 C16 C6 C8 ^
+--split_mode random_epoch ^
+--model cnn_lstm ^
+--cnn_channels 32 64 128 ^
+--rnn_type lstm ^
+--rnn_hidden 64 ^
+--rnn_layers 1 ^
+--dense_hidden 64 ^
+--dropout 0.3 ^
+--norm batch ^
+--window_size 128 ^
+--overlap 0.25 ^
+--lr 0.0003 ^
+--epochs 5
+
 6️⃣ CNN + GRU
 python train.py ^
 --data_root data\leicester_dataset ^

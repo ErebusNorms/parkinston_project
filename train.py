@@ -2,28 +2,23 @@ import argparse
 import os
 import torch
 import pytorch_lightning as pl
-
 import random
 import numpy as np
-
 from torch.utils.data import DataLoader
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
-from pytorch_lightning.loggers import CSVLogger
-
+from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
 from datasets.leicester_dataset import LeicesterDataset
 from models.factory import build_model
 from trainers.lightning_module import EEGTrainer
-
 from torch.utils.data import random_split
 from torchinfo import summary
-
 import pandas as pd
-
 import json
 from datetime import datetime
-
-
-
+import pickle
+from sklearn.metrics import classification_report, confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 
 def parse_args():
@@ -88,9 +83,12 @@ def main(args):
 
     set_seed(args.seed)
     run_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_seed{args.seed}"
-
-    log_dir = os.path.join("logs", args.model, run_id)
+    run_name = f"{args.model}_ws{args.window_size}_ov{args.overlap}_norm{args.norm}_seed{args.seed}"
+    log_dir = os.path.join("logs", args.model, run_id+"_"+run_name)
     os.makedirs(log_dir, exist_ok=True)
+    tensorBoard_dir = os.path.join("tensorboard", args.model, run_id+"_"+run_name)
+    os.makedirs(tensorBoard_dir, exist_ok=True)
+
 
     # save config
     with open(os.path.join(log_dir, "config.json"), "w") as f:
@@ -227,49 +225,75 @@ def main(args):
     # )
 
 
-    lit_model = EEGTrainer(model, lr=args.lr)
+    lit_model = EEGTrainer(
+        model=model, 
+        lr=args.lr,
+        model_name=args.model,
+        run_name=run_id + "_" + run_name
+    )
 
     # ===============================
     # LOGGING + CHECKPOINT
     # ===============================
 
-    run_name = f"{args.split_mode}_{'_'.join(args.train_dirs)}"
-    ckpt_dir = os.path.join("checkpoints", args.model, run_name)
+    ckpt_dir = os.path.join("checkpoints", args.model, run_id + "_" + run_name)
     os.makedirs(ckpt_dir, exist_ok=True)
 
-    logger = CSVLogger(save_dir=log_dir, name="")
+    csv_logger = CSVLogger(save_dir="logs", name=args.model,version=run_id + "_" + run_name)
+    tb_logger = TensorBoardLogger(save_dir="tensorboard", name=args.model, version=run_id + "_" + run_name)
 
     checkpoint_callback = ModelCheckpoint(
         dirpath=ckpt_dir,
-        save_last=True,
+        filename="best",
+        monitor="val_acc",     # 🔥 chọn metric chính
+        mode="max",
         save_top_k=1,
-        monitor="val_loss",
-        mode="min"
+        save_last=True         # 🔥 sẽ tạo last.ckpt
     )
 
     early_stop = EarlyStopping(
         monitor="val_loss",
-        patience=5,
+        patience=10,
         mode="min"
     )
 
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         accelerator="auto",
-        logger=logger,
+        logger=[csv_logger, tb_logger],
         deterministic="warn",
+        num_sanity_val_steps=0,
         callbacks=[checkpoint_callback, early_stop],
         gradient_clip_val=1.0
     )
 
     trainer.fit(lit_model, train_loader, val_loader)
+    # val_results = trainer.test(lit_model, val_loader)
+    # test_results = trainer.test(lit_model, test_loader)
+    metrics = trainer.callback_metrics
 
-    val_results = trainer.test(lit_model, val_loader)
-    test_results = trainer.test(lit_model, test_loader)
+    # lấy history từ CSVLogger
+    log_dir = csv_logger.log_dir
+    metrics_file = os.path.join(log_dir, "metrics.csv")
+
+    import pandas as pd
+    df = pd.read_csv(metrics_file)
+
+    with open(os.path.join(log_dir, "curves.pkl"), "wb") as f:
+        pickle.dump(df.to_dict(), f)
+
+    # load best model
+    best_path = checkpoint_callback.best_model_path
+
+    print("Best checkpoint:", best_path)
+    val_results = trainer.test(lit_model, dataloaders=val_loader, ckpt_path=best_path)
+    test_results = trainer.test(lit_model, dataloaders=test_loader, ckpt_path=best_path)
+
 
     val_metrics = val_results[0]
     test_metrics = test_results[0]
 
+    metrics = trainer.callback_metrics
 
     df = pd.DataFrame([{
         "model": args.model,
@@ -278,19 +302,22 @@ def main(args):
         "overlap": args.overlap,
         "norm": args.norm,
 
-        "test_acc": test_metrics["test_acc"],
-        "test_bal_acc": test_metrics["test_bal_acc"],
-        "test_f1": test_metrics["test_f1"],
-        "test_precision": test_metrics["test_precision"],
-        "test_recall": test_metrics["test_recall"],
-        "test_kappa": test_metrics["test_kappa"],
+        "test_acc": metrics["test_acc"].item(),
+        "test_bal_acc": metrics["test_bal_acc"].item(),
+        "test_f1": metrics["test_f1"].item(),
+        "test_precision": metrics["test_precision"].item(),
+        "test_recall": metrics["test_recall"].item(),
+        "test_kappa": metrics["test_kappa"].item(),
     }])
 
-    df.to_csv(os.path.join(log_dir, "test_metrics.csv"), index=False)
-    pd.DataFrame([val_metrics]).to_csv(
-        os.path.join(log_dir, "val_metrics.csv"),
-        index=False
-    )
+    save_path = os.path.join("logs", args.model,run_id+"_"+run_name)
+    os.makedirs(save_path, exist_ok=True)
+
+    df.to_csv(os.path.join(save_path, "test_results.csv"), index=False)
+
+
+
+
 
 if __name__ == "__main__":
     args = parse_args()
